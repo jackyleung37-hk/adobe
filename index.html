@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Adobe 設備管理 · 雲端同步版</title>
+    <!-- 引入 Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+    </script>
+    <style>
+        /* === 样式与之前相同，略作精简 === */
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(145deg, #f6f9fc, #e9f0f5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+        .card {
+            max-width: 780px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border-radius: 40px;
+            padding: 2rem;
+            box-shadow: 0 25px 45px -12px rgba(0, 20, 40, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 600;
+            color: #0a1e2f;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin: 0 0 0.3rem 0;
+        }
+        .subhead {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            padding-bottom: 1.2rem;
+            margin-bottom: 1.8rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .badge-limit {
+            background: #0a1e2f;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 0.3rem 1rem;
+            border-radius: 40px;
+        }
+        .device-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        @media (max-width: 520px) {
+            .device-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .device-card {
+            background: white;
+            border-radius: 24px;
+            padding: 1.25rem 1rem;
+            box-shadow: 0 6px 16px -8px rgba(0, 20, 30, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.02);
+        }
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .device-name {
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #0f2b3b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-pill {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.2rem 0.9rem;
+            border-radius: 40px;
+            background: #eef2f6;
+            color: #3a4c5c;
+        }
+        .status-pill.in-use {
+            background: #e3f0fc;
+            color: #005a9c;
+        }
+        .status-pill.free {
+            background: #e8f5e9;
+            color: #1e6b3b;
+        }
+        .user-badge {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            min-height: 2.6rem;
+            margin-top: 6px;
+        }
+        .user-tag {
+            background: #f0f4f9;
+            padding: 0.25rem 1rem 0.25rem 0.9rem;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #1f3a4b;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .user-tag .remove-btn {
+            background: none;
+            border: none;
+            color: #7a8f9e;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 0 2px;
+        }
+        .user-tag .remove-btn:hover {
+            color: #b91c1c;
+        }
+        .empty-user {
+            color: #7a8f9e;
+            font-size: 0.85rem;
+        }
+        .action-area {
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 32px;
+            padding: 1.8rem 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #1f3a4b;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .user-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem 1rem;
+            align-items: center;
+            margin-bottom: 1.4rem;
+        }
+        .user-btn {
+            background: white;
+            border: 1px solid #d3dee8;
+            padding: 0.45rem 1.2rem;
+            border-radius: 60px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: #1f3a4b;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .user-btn.active-user {
+            background: #0a1e2f;
+            border-color: #0a1e2f;
+            color: white;
+        }
+        .user-btn:disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            margin-top: 0.4rem;
+        }
+        .btn {
+            background: white;
+            border: 1px solid #cbd8e4;
+            padding: 0.6rem 1.6rem;
+            border-radius: 60px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.15s;
+            flex: 1 0 auto;
+            text-align: center;
+        }
+        .btn-primary {
+            background: #0a1e2f;
+            border-color: #0a1e2f;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #12384d;
+        }
+        .btn-secondary {
+            background: #f0f4f9;
+            border-color: #d3dee8;
+        }
+        .btn-outline {
+            background: transparent;
+            border-color: #cbd8e4;
+            flex: 0.5;
+        }
+        .btn-danger {
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+        .btn:disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        .log-area {
+            margin-top: 2rem;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 24px;
+            padding: 0.8rem 1.2rem 0.5rem;
+        }
+        .log-entry {
+            font-size: 0.8rem;
+            color: #2f4a5e;
+            padding: 0.3rem 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.02);
+            display: flex;
+            gap: 0.8rem;
+            align-items: baseline;
+        }
+        .log-time {
+            color: #5f7a8c;
+            min-width: 65px;
+            font-size: 0.7rem;
+        }
+        .clear-log {
+            background: none;
+            border: none;
+            color: #7a8f9e;
+            font-size: 0.7rem;
+            cursor: pointer;
+            text-decoration: underline dotted;
+        }
+        .footer-note {
+            margin-top: 1.2rem;
+            font-size: 0.75rem;
+            color: #5f7a8c;
+            text-align: center;
+            opacity: 0.7;
+        }
+        .online-badge {
+            display: inline-block;
+            background: #22c55e;
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.15rem 0.8rem;
+            border-radius: 40px;
+            margin-left: 0.5rem;
+        }
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .flex-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card" id="app">
+        <div class="subhead">
+            <h1>
+                <span>🖥️</span> 設備使用
+                <span class="online-badge" id="statusBadge">● 連線中</span>
+            </h1>
+            <div class="badge-limit">🔒 同時最多 2 部裝置</div>
+        </div>
+
+        <div class="device-grid">
+            <div class="device-card" data-device="1">
+                <div class="device-header">
+                    <span class="device-name"><span class="device-icon">💻</span> 裝置 A</span>
+                    <span class="status-pill" id="status1">🟢 可用</span>
+                </div>
+                <div class="user-badge" id="userBadge1">
+                    <span class="empty-user">— 無人使用</span>
+                </div>
+            </div>
+            <div class="device-card" data-device="2">
+                <div class="device-header">
+                    <span class="device-name"><span class="device-icon">📱</span> 裝置 B</span>
+                    <span class="status-pill" id="status2">🟢 可用</span>
+                </div>
+                <div class="user-badge" id="userBadge2">
+                    <span class="empty-user">— 無人使用</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-area">
+            <div class="section-title">
+                <span>👥 使用者</span>
+                <span style="font-weight:400; font-size:0.8rem; color:#5f7a8c;">點選姓名，再按「登入」或「登出」</span>
+            </div>
+
+            <div class="user-selector" id="userSelector">
+                <button class="user-btn" data-user="Alex">👤 Alex</button>
+                <button class="user-btn" data-user="Betty">👤 Betty</button>
+                <button class="user-btn" data-user="Chris">👤 Chris</button>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="loginBtn">🔓 登入</button>
+                <button class="btn btn-secondary" id="logoutBtn">🔒 登出</button>
+                <button class="btn btn-outline" id="refreshBtn">⟳ 更新</button>
+            </div>
+
+            <div class="log-area">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size:0.75rem; font-weight:500; color:#2f4a5e;">📋 活動記錄</span>
+                    <button class="clear-log" id="clearLogBtn">清除</button>
+                </div>
+                <div id="logEntries">
+                    <div class="log-entry"><span class="log-time">--</span><span class="log-msg">準備就緒</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="footer-note">
+            ⚡ 所有操作即時同步至雲端 · 三人共用同一份狀態
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // 1. 請替換成您的 Supabase 憑證 (免費註冊: https://supabase.com)
+        // ============================================================
+        const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+        const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+
+        // ============================================================
+        // 2. 初始化 Supabase 客戶端
+        // ============================================================
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ============================================================
+        // 3. 狀態與 DOM 參考
+        // ============================================================
+        const state = {
+            devices: { 1: null, 2: null }, // deviceId -> userName or null
+            selectedUser: 'Alex',
+            logs: [],
+            isSubscribed: false
+        };
+
+        const statusEls = {
+            1: document.getElementById('status1'),
+            2: document.getElementById('status2')
+        };
+        const badgeEls = {
+            1: document.getElementById('userBadge1'),
+            2: document.getElementById('userBadge2')
+        };
+        const userBtns = document.querySelectorAll('.user-btn');
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const logContainer = document.getElementById('logEntries');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const statusBadge = document.getElementById('statusBadge');
+
+        // ============================================================
+        // 4. 核心函數：讀取 / 寫入資料庫
+        // ============================================================
+
+        // 從資料庫載入裝置狀態
+        async function loadDevicesFromDB() {
+            try {
+                const { data, error } = await supabase
+                    .from('device_status')
+                    .select('*')
+                    .order('id');
+
+                if (error) throw error;
+
+                if (data && data.length === 2) {
+                    // 預期有兩筆資料: id=1 (裝置A), id=2 (裝置B)
+                    data.forEach(row => {
+                        const deviceId = row.id;
+                        state.devices[deviceId] = row.user_name || null;
+                    });
+                    renderAll();
+                    return true;
+                } else {
+                    // 若無資料，初始化兩筆
+                    await initDatabase();
+                    return true;
+                }
+            } catch (err) {
+                console.error('載入失敗:', err);
+                statusBadge.textContent = '⚠️ 離線';
+                statusBadge.style.background = '#ef4444';
+                return false;
+            }
+        }
+
+        // 初始化資料庫 (僅在無資料時呼叫)
+        async function initDatabase() {
+            try {
+                // 先檢查是否已有資料
+                const { data, error } = await supabase.from('device_status').select('id');
+                if (error) throw error;
+                if (data && data.length > 0) return; // 已有資料
+
+                // 插入初始兩筆
+                const { error: insertError } = await supabase
+                    .from('device_status')
+                    .insert([
+                        { id: 1, device_name: 'A', user_name: null },
+                        { id: 2, device_name: 'B', user_name: null }
+                    ]);
+                if (insertError) throw insertError;
+                state.devices = { 1: null, 2: null };
+                renderAll();
+                addLog('📦 資料庫已初始化');
+            } catch (err) {
+                console.error('初始化失敗:', err);
+            }
+        }
+
+        // 更新資料庫中某一裝置的使用者
+        async function updateDeviceInDB(deviceId, userName) {
+            try {
+                const { error } = await supabase
+                    .from('device_status')
+                    .update({ user_name: userName, updated_at: new Date().toISOString() })
+                    .eq('id', deviceId);
+
+                if (error) throw error;
+                // 本地狀態也更新 (但 realtime 會再同步，雙重保障)
+                state.devices[deviceId] = userName;
+                renderAll();
+                return true;
+            } catch (err) {
+                console.error('更新失敗:', err);
+                statusBadge.textContent = '⚠️ 更新失敗';
+                statusBadge.style.background = '#ef4444';
+                return false;
+            }
+        }
+
+        // ============================================================
+        // 5. 即時同步 (Realtime) — 當資料庫變動時自動更新畫面
+        // ============================================================
+        function subscribeToChanges() {
+            if (state.isSubscribed) return;
+
+            const channel = supabase
+                .channel('device_status_changes')
+                .on(
+                    'postgres_changes', {
+                        event: 'UPDATE',
+                        schema: 'public',
+                        table: 'device_status'
+                    },
+                    (payload) => {
+                        // 收到更新事件，重新載入狀態
+                        const newData = payload.new;
+                        if (newData && newData.id) {
+                            state.devices[newData.id] = newData.user_name || null;
+                            // 記錄變更 (但避免重複記錄太多)
+                            renderAll();
+                            // 若使用者已登入，更新按鈕狀態
+                            renderUserButtons();
+                        }
+                    }
+                )
+                .subscribe((status, err) => {
+                    if (status === 'SUBSCRIBED') {
+                        state.isSubscribed = true;
+                        statusBadge.textContent = '● 即時同步';
+                        statusBadge.style.background = '#22c55e';
+                    } else if (err) {
+                        console.warn('Realtime 錯誤:', err);
+                        statusBadge.textContent = '⚠️ 同步延遲';
+                        statusBadge.style.background = '#f59e0b';
+                    }
+                });
+
+            // 儲存 channel 以便後續清理 (選擇性)
+            window._supabaseChannel = channel;
+        }
+
+        // ============================================================
+        // 6. 渲染函數
+        // ============================================================
+        function renderDevices() {
+            for (let deviceId of [1, 2]) {
+                const user = state.devices[deviceId] || null;
+                const statusPill = statusEls[deviceId];
+                const badge = badgeEls[deviceId];
+
+                if (user) {
+                    statusPill.textContent = `🔴 使用中 (${user})`;
+                    statusPill.className = 'status-pill in-use';
+                    badge.innerHTML = `
+                        <span class="user-tag">
+                            <span>👤 ${user}</span>
+                            <button class="remove-btn" data-device="${deviceId}" data-user="${user}" title="登出此裝置">✕</button>
+                        </span>
+                    `;
+                    const removeBtn = badge.querySelector('.remove-btn');
+                    if (removeBtn) {
+                        removeBtn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            const dev = parseInt(this.dataset.device);
+                            const usr = this.dataset.user;
+                            if (state.devices[dev] === usr) {
+                                handleLogoutUser(dev, usr);
+                            }
+                        });
+                    }
+                } else {
+                    statusPill.textContent = '🟢 可用';
+                    statusPill.className = 'status-pill free';
+                    badge.innerHTML = `<span class="empty-user">— 無人使用</span>`;
+                }
+            }
+        }
+
+        function renderUserButtons() {
+            const users = ['Alex', 'Betty', 'Chris'];
+            userBtns.forEach(btn => {
+                const user = btn.dataset.user;
+                const isLogged = isUserLoggedIn(user);
+                btn.disabled = isLogged;
+                if (user === state.selectedUser) {
+                    btn.classList.add('active-user');
+                } else {
+                    btn.classList.remove('active-user');
+                }
+                btn.textContent = isLogged ? `👤 ${user} ✔` : `👤 ${user}`;
+            });
+        }
+
+        function renderLogs() {
+            if (!logContainer) return;
+            if (state.logs.length === 0) {
+                logContainer.innerHTML =
+                    `<div class="log-entry"><span class="log-time">--</span><span class="log-msg">沒有記錄</span></div>`;
+                return;
+            }
+            let html = '';
+            state.logs.slice(0, 20).forEach(log => {
+                html +=
+                    `<div class="log-entry"><span class="log-time">${log.time}</span><span class="log-msg">${log.message}</span></div>`;
+            });
+            logContainer.innerHTML = html;
+        }
+
+        function renderAll() {
+            renderDevices();
+            renderUserButtons();
+            renderLogs();
+        }
+
+        // ============================================================
+        // 7. 業務邏輯
+        // ============================================================
+        function isUserLoggedIn(user) {
+            return state.devices[1] === user || state.devices[2] === user;
+        }
+
+        function findDeviceByUser(user) {
+            if (state.devices[1] === user) return 1;
+            if (state.devices[2] === user) return 2;
+            return null;
+        }
+
+        function findFreeDevice() {
+            if (state.devices[1] === null) return 1;
+            if (state.devices[2] === null) return 2;
+            return null;
+        }
+
+        function addLog(message) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            state.logs.unshift({ time: timeStr, message: message });
+            if (state.logs.length > 50) state.logs.pop();
+            renderLogs();
+        }
+
+        // 登入操作
+        async function handleLogin() {
+            const user = state.selectedUser;
+            if (!user) { alert('請選擇一位使用者'); return; }
+
+            if (isUserLoggedIn(user)) {
+                addLog(`⚠️ ${user} 已登入，無法重複登入`);
+                renderAll();
+                return;
+            }
+
+            const freeDevice = findFreeDevice();
+            if (freeDevice === null) {
+                addLog(`❌ 兩部裝置皆在使用中，${user} 無法登入`);
+                renderAll();
+                return;
+            }
+
+            // 寫入資料庫
+            const success = await updateDeviceInDB(freeDevice, user);
+            if (success) {
+                addLog(`✅ ${user} 登入裝置 ${freeDevice === 1 ? 'A' : 'B'}`);
+                // 資料庫更新後，realtime 會自動觸發 renderAll
+                // 但為了即時回饋，我們手動更新本地狀態 (updateDeviceInDB 已更新)
+                renderAll();
+            }
+        }
+
+        // 登出操作 (由按鈕觸發)
+        async function handleLogout() {
+            const user = state.selectedUser;
+            if (!user) { alert('請選擇一位使用者'); return; }
+
+            if (!isUserLoggedIn(user)) {
+                addLog(`⚠️ ${user} 目前未登入任何裝置`);
+                renderAll();
+                return;
+            }
+
+            const deviceId = findDeviceByUser(user);
+            if (deviceId === null) {
+                addLog(`⚠️ 狀態異常，請重新整理`);
+                renderAll();
+                return;
+            }
+
+            const success = await updateDeviceInDB(deviceId, null);
+            if (success) {
+                addLog(`🔓 ${user} 已從裝置 ${deviceId === 1 ? 'A' : 'B'} 登出`);
+                renderAll();
+            }
+        }
+
+        // 直接登出 (從裝置卡片上的 ✕ 按鈕)
+        async function handleLogoutUser(deviceId, user) {
+            if (state.devices[deviceId] !== user) {
+                renderAll();
+                return;
+            }
+            const success = await updateDeviceInDB(deviceId, null);
+            if (success) {
+                addLog(`🔓 ${user} 已從裝置 ${deviceId === 1 ? 'A' : 'B'} 登出 (快速)`);
+                renderAll();
+            }
+        }
+
+        // ============================================================
+        // 8. 初始化與事件綁定
+        // ============================================================
+        async function init() {
+            // 載入資料
+            await loadDevicesFromDB();
+
+            // 訂閱即時更新
+            subscribeToChanges();
+
+            // 使用者按鈕
+            userBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const user = this.dataset.user;
+                    state.selectedUser = user;
+                    renderUserButtons();
+                });
+            });
+
+            // 登入 / 登出
+            loginBtn.addEventListener('click', handleLogin);
+            logoutBtn.addEventListener('click', handleLogout);
+
+            // 手動刷新
+            refreshBtn.addEventListener('click', async () => {
+                await loadDevicesFromDB();
+                addLog('🔄 已重新整理');
+                renderAll();
+            });
+
+            // 清除日誌 (僅清除本地顯示，不影響資料庫)
+            clearLogBtn.addEventListener('click', function() {
+                state.logs = [];
+                renderLogs();
+                addLog('🗑️ 日誌已清除');
+            });
+
+            // 設定初始選取
+            if (userBtns.length > 0) {
+                state.selectedUser = userBtns[0].dataset.user;
+                renderUserButtons();
+            }
+
+            renderAll();
+            addLog('🌐 雲端同步已啟動');
+        }
+
+        // 啟動
+        init();
+    </script>
+</body>
+</html>
