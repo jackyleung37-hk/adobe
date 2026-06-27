@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Adobe A/C 管理</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js">
+    </script>
     <style>
         * {
             margin: 0;
@@ -11,7 +16,8 @@
             box-sizing: border-box;
         }
 
-        html, body {
+        html,
+        body {
             height: 100%;
             background: #0a0a0a;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -44,19 +50,39 @@
             flex-shrink: 0;
             letter-spacing: 0.5px;
             background: #0a0a0a;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
         }
 
         .title span {
             display: inline-block;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             color: #aaa;
             padding: 2px 14px;
             border-radius: 8px;
             font-size: 14px;
             font-weight: 500;
-            margin-left: 10px;
-            vertical-align: middle;
+        }
+
+        .status-badge {
+            display: inline-block;
+            font-size: 12px;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        .status-badge.online {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .status-badge.offline {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
         }
 
         /* 三個大按鈕 */
@@ -86,11 +112,17 @@
             box-shadow: 0 4px 20px rgba(239, 68, 68, 0.2);
             letter-spacing: 0.5px;
             min-height: 0;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
         .user-btn:active {
             transform: scale(0.96);
+        }
+
+        .user-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
         }
 
         /* 登入狀態 - 綠色 */
@@ -121,10 +153,17 @@
         .footer {
             text-align: center;
             font-size: 12px;
-            color: rgba(255,255,255,0.15);
+            color: rgba(255, 255, 255, 0.15);
             padding: 10px 0 6px 0;
             flex-shrink: 0;
-            border-top: 1px solid rgba(255,255,255,0.03);
+            border-top: 1px solid rgba(255, 255, 255, 0.03);
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .footer span {
+            color: rgba(255, 255, 255, 0.2);
         }
 
         /* 響應式 */
@@ -139,7 +178,6 @@
             .title span {
                 font-size: 12px;
                 padding: 2px 10px;
-                margin-left: 6px;
             }
             .user-btn {
                 font-size: 24px;
@@ -155,6 +193,10 @@
             .button-group {
                 gap: 8px;
                 padding: 6px 0;
+            }
+            .status-badge {
+                font-size: 10px;
+                padding: 2px 10px;
             }
         }
 
@@ -224,54 +266,226 @@
         <!-- 大標題 -->
         <div class="title">
             Adobe A/C
+            <span>2 裝置</span>
+            <span class="status-badge online" id="connectionStatus">● 已連線</span>
         </div>
 
         <!-- 三個大按鈕 -->
         <div class="button-group">
-            <button class="user-btn logged-out" data-user="Jacky">
+            <button class="user-btn logged-out" data-user="jacky" id="btnJacky">
                 <span class="user-name">👤 Jacky</span>
                 <span class="user-status">Logged Out</span>
             </button>
 
-            <button class="user-btn logged-out" data-user="Harold">
+            <button class="user-btn logged-out" data-user="harold" id="btnHarold">
                 <span class="user-name">👤 Harold</span>
                 <span class="user-status">Logged Out</span>
             </button>
 
-            <button class="user-btn logged-out" data-user="Sion">
+            <button class="user-btn logged-out" data-user="sion" id="btnSion">
                 <span class="user-name">👤 Sion</span>
                 <span class="user-status">Logged Out</span>
             </button>
         </div>
 
         <div class="footer">
-            ● 點擊切換登入 / 登出
+            <span>● 點擊切換登入 / 登出</span>
+            <span>|</span>
+            <span id="syncStatus">🔄 即時同步</span>
         </div>
     </div>
 
     <script>
         // ============================================================
-        // 離線示範: 點擊按鈕切換顏色 (紅 ↔ 綠) + 更新文字
+        // 1. Firebase 配置 (您提供的)
         // ============================================================
-        const buttons = document.querySelectorAll('.user-btn');
+        const firebaseConfig = {
+            apiKey: "AIzaSyBYYp89kzS9-rIJWiWl920RL6_hoBYiU7Q",
+            authDomain: "adobe-1c98d.firebaseapp.com",
+            databaseURL: "https://adobe-1c98d-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "adobe-1c98d",
+            storageBucket: "adobe-1c98d.firebasestorage.app",
+            messagingSenderId: "973037364482",
+            appId: "1:973037364482:web:16301092fe861deb00ce1b",
+            measurementId: "G-GSB1QJ2LMN"
+        };
 
-        buttons.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const statusText = this.querySelector('.user-status');
-                
-                if (this.classList.contains('logged-in')) {
-                    // 切換到登出
-                    this.classList.remove('logged-in');
-                    this.classList.add('logged-out');
-                    statusText.textContent = 'Logged Out';
-                } else {
-                    // 切換到登入
-                    this.classList.remove('logged-out');
-                    this.classList.add('logged-in');
-                    statusText.textContent = 'Logged In';
+        // ============================================================
+        // 2. 初始化 Firebase
+        // ============================================================
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // ============================================================
+        // 3. DOM 參考
+        // ============================================================
+        const buttons = {
+            jacky: document.getElementById('btnJacky'),
+            harold: document.getElementById('btnHarold'),
+            sion: document.getElementById('btnSion')
+        };
+
+        const connectionStatus = document.getElementById('connectionStatus');
+        const syncStatus = document.getElementById('syncStatus');
+
+        // 使用者列表
+        const USERS = ['jacky', 'harold', 'sion'];
+        const USER_DISPLAY = {
+            jacky: 'Jacky',
+            harold: 'Harold',
+            sion: 'Sion'
+        };
+
+        // ============================================================
+        // 4. 更新 UI 函數
+        // ============================================================
+        function updateButtonUI(user, status) {
+            const btn = buttons[user];
+            if (!btn) return;
+
+            const statusText = btn.querySelector('.user-status');
+
+            if (status === 'logged_in') {
+                btn.classList.remove('logged-out');
+                btn.classList.add('logged-in');
+                statusText.textContent = 'Logged In';
+            } else {
+                btn.classList.remove('logged-in');
+                btn.classList.add('logged-out');
+                statusText.textContent = 'Logged Out';
+            }
+        }
+
+        function setAllButtonsDisabled(disabled) {
+            USERS.forEach(user => {
+                buttons[user].disabled = disabled;
+            });
+        }
+
+        // ============================================================
+        // 5. 從 Firebase 載入資料 (初次載入)
+        // ============================================================
+        function loadFromFirebase() {
+            const usersRef = database.ref('users');
+
+            usersRef.once('value')
+                .then((snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        // 更新每個使用者的狀態
+                        USERS.forEach(user => {
+                            const status = data[user] || 'logged_out';
+                            updateButtonUI(user, status);
+                        });
+                    } else {
+                        // 如果資料庫是空的，初始化所有使用者為 logged_out
+                        initializeDatabase();
+                    }
+                    connectionStatus.textContent = '● 已連線';
+                    connectionStatus.className = 'status-badge online';
+                    setAllButtonsDisabled(false);
+                })
+                .catch((error) => {
+                    console.error('載入失敗:', error);
+                    connectionStatus.textContent = '● 離線';
+                    connectionStatus.className = 'status-badge offline';
+                    setAllButtonsDisabled(true);
+                });
+        }
+
+        // ============================================================
+        // 6. 初始化資料庫 (第一次使用)
+        // ============================================================
+        function initializeDatabase() {
+            const updates = {};
+            USERS.forEach(user => {
+                updates[`users/${user}`] = 'logged_out';
+            });
+
+            database.ref().update(updates)
+                .then(() => {
+                    console.log('資料庫已初始化');
+                    USERS.forEach(user => {
+                        updateButtonUI(user, 'logged_out');
+                    });
+                })
+                .catch((error) => {
+                    console.error('初始化失敗:', error);
+                });
+        }
+
+        // ============================================================
+        // 7. 即時監聽 (Realtime) - 當資料庫變動時自動更新畫面
+        // ============================================================
+        function listenToChanges() {
+            const usersRef = database.ref('users');
+
+            usersRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    USERS.forEach(user => {
+                        const status = data[user] || 'logged_out';
+                        updateButtonUI(user, status);
+                    });
+                    syncStatus.textContent = '🔄 即時同步';
+                    connectionStatus.textContent = '● 已連線';
+                    connectionStatus.className = 'status-badge online';
+                    setAllButtonsDisabled(false);
                 }
+            }, (error) => {
+                console.error('監聽錯誤:', error);
+                connectionStatus.textContent = '● 連線中斷';
+                connectionStatus.className = 'status-badge offline';
+                syncStatus.textContent = '⚠️ 同步延遲';
+            });
+        }
+
+        // ============================================================
+        // 8. 切換登入/登出 (點擊按鈕)
+        // ============================================================
+        function toggleUserStatus(user) {
+            const btn = buttons[user];
+            if (btn.disabled) return;
+
+            // 取得目前狀態
+            const isLoggedIn = btn.classList.contains('logged-in');
+            const newStatus = isLoggedIn ? 'logged_out' : 'logged_in';
+
+            // 更新到 Firebase
+            const userRef = database.ref(`users/${user}`);
+            userRef.set(newStatus)
+                .then(() => {
+                    // Firebase 的監聽會自動更新 UI，不用手動更新
+                    console.log(`${user} 狀態已更新為 ${newStatus}`);
+                })
+                .catch((error) => {
+                    console.error('更新失敗:', error);
+                    alert('更新失敗，請檢查網路連線');
+                });
+        }
+
+        // ============================================================
+        // 9. 綁定事件
+        // ============================================================
+        USERS.forEach(user => {
+            buttons[user].addEventListener('click', function() {
+                toggleUserStatus(user);
             });
         });
+
+        // ============================================================
+        // 10. 初始化
+        // ============================================================
+        console.log('🚀 Adobe A/C 管理系統啟動中...');
+
+        // 先顯示載入中
+        setAllButtonsDisabled(true);
+
+        // 載入資料 + 開始監聽
+        loadFromFirebase();
+        listenToChanges();
+
+        console.log('✅ 系統已就緒');
     </script>
 
 </body>
